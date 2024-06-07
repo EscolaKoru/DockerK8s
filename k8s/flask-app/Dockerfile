@@ -10,6 +10,7 @@ RUN pip install -r requirements.txt
 
 # Copie o código da aplicação
 COPY app.py app.py
+COPY templates templates
 
 # Defina o comando padrão a ser executado quando o container iniciar
 CMD ["python", "app.py"]

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <script>
+        function execSom() {
+          var playAudio = document.getElementById("playaudio");
+          playAudio.play();
+        }
+    </script>
+
+    <title>Minha Página</title>
+    <style>
+        body {
+            background-image: url('https://imagenes.elpais.com/resizer/v2/WZF3MMB4ONHUTB5KBSMFZ7L2OI.JPG?auth=f7528b0d674a73328421e444a643e8f7a15b5329e4cfc3d364313fefbee3e08c&width=980');
+            background-size: cover;
+            background-repeat: no-repeat;
+            height: 100vh;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white; /* Adicionado: define a cor do texto como branco */
+        }
+        h1 {
+            font-size: 36px;
+            text-align: center;
+            text-shadow: 2px 2px 4px #000000;
+        }
+    </style>
+</head>
+<body onmouseover="execSom()">
+    <h1>Bem-vindo ao Chaves App!</h1>
+    <audio style="visibility:hidden" autoplay loop="loop" id='playaudio'>
+    <source src="chaves.mp3" type="audio/mp3"/>
+        Seu navegador não suporta HTML5
+        </audio>
+</body>
+</html>
