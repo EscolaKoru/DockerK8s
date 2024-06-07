@@ -1,19 +1,16 @@
 from flask import Flask, jsonify, request, render_template
 from prometheus_flask_exporter import PrometheusMetrics
 from prometheus_client import start_http_server, Summary, Counter, Gauge, generate_latest
-import random
-import time
 
-app = Flask(__name__, template_folder= "templates")
+app = Flask(__name__, template_folder="templates")
 metrics = PrometheusMetrics(app)
 
 metrics.info('app_info', 'Application info', version='1.0.0')
 
-
 # Create metrics
 REQUEST_TIME = Summary('request_processing_seconds', 'Time spent processing request')
-REQUEST_COUNT = Counter('request_count', 'Number of requests processed')
-IN_PROGRESS = Gauge('inprogress_requests', 'Number of requests in progress')
+REQUEST_COUNT = Counter('request_count', 'Number of requests processed', ['endpoint'])
+IN_PROGRESS = Gauge('inprogress_requests', 'Number of requests in progress', ['endpoint'])
 
 # Exemplo de dados simulados em um banco de dados
 db = [
@@ -27,26 +24,33 @@ db = [
     {"id": 8, "nome": "Don Ramón", "idade": 40}
 ]
 
-@REQUEST_TIME.time()
-def process_request(t):
-    time.sleep(t)
-
 @app.route('/')
+@REQUEST_TIME.time()
 def home():
-    IN_PROGRESS.inc()
-    process_request(random.random())
-    REQUEST_COUNT.inc()
-    IN_PROGRESS.dec()
+    endpoint = '/'
+    IN_PROGRESS.labels(endpoint=endpoint).inc()
+    REQUEST_COUNT.labels(endpoint=endpoint).inc()
+    IN_PROGRESS.labels(endpoint=endpoint).dec()
     return render_template('index.html')
 
 # Endpoint para retornar todos os registros
 @app.route('/api/data', methods=['GET'])
+@REQUEST_TIME.time()
 def get_all_data():
+    endpoint = '/api/data'
+    IN_PROGRESS.labels(endpoint=endpoint).inc()
+    REQUEST_COUNT.labels(endpoint=endpoint).inc()
+    IN_PROGRESS.labels(endpoint=endpoint).dec()
     return jsonify(db)
 
 # Endpoint para retornar um registro específico
 @app.route('/api/data/<int:data_id>', methods=['GET'])
+@REQUEST_TIME.time()
 def get_data(data_id):
+    endpoint = f'/api/data/{data_id}'
+    IN_PROGRESS.labels(endpoint=endpoint).inc()
+    REQUEST_COUNT.labels(endpoint=endpoint).inc()
+    IN_PROGRESS.labels(endpoint=endpoint).dec()
     data = next((item for item in db if item["id"] == data_id), None)
     if data:
         return jsonify(data)
@@ -55,7 +59,12 @@ def get_data(data_id):
 
 # Endpoint para adicionar um novo registro
 @app.route('/api/data', methods=['POST'])
+@REQUEST_TIME.time()
 def add_data():
+    endpoint = '/api/data'
+    IN_PROGRESS.labels(endpoint=endpoint).inc()
+    REQUEST_COUNT.labels(endpoint=endpoint).inc()
+    IN_PROGRESS.labels(endpoint=endpoint).dec()
     new_data = request.json
     if "id" in new_data and "nome" in new_data and "idade" in new_data:
         db.append(new_data)
@@ -65,7 +74,12 @@ def add_data():
 
 # Endpoint para atualizar um registro existente
 @app.route('/api/data/<int:data_id>', methods=['PUT'])
+@REQUEST_TIME.time()
 def update_data(data_id):
+    endpoint = f'/api/data/{data_id}'
+    IN_PROGRESS.labels(endpoint=endpoint).inc()
+    REQUEST_COUNT.labels(endpoint=endpoint).inc()
+    IN_PROGRESS.labels(endpoint=endpoint).dec()
     data = next((item for item in db if item["id"] == data_id), None)
     if data:
         data.update(request.json)
@@ -75,7 +89,12 @@ def update_data(data_id):
 
 # Endpoint para deletar um registro
 @app.route('/api/data/<int:data_id>', methods=['DELETE'])
+@REQUEST_TIME.time()
 def delete_data(data_id):
+    endpoint = f'/api/data/{data_id}'
+    IN_PROGRESS.labels(endpoint=endpoint).inc()
+    REQUEST_COUNT.labels(endpoint=endpoint).inc()
+    IN_PROGRESS.labels(endpoint=endpoint).dec()
     global db
     db = [item for item in db if item["id"] != data_id]
     return jsonify({"message": "Data deleted successfully"})
