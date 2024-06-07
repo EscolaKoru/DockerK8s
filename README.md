@@ -260,37 +260,51 @@ Para adicionar um serviço de APM de código aberto ano projeto Flask sem usar D
    Modifique o `app.py` para expor as métricas do Prometheus:
 
    ```python
-   from flask import Flask, render_template, request
-   from prometheus_client import start_http_server, Summary, Counter, Gauge, generate_latest
-   import random
-   import time
+   from flask import Flask, request
+   from prometheus_flask_exporter import PrometheusMetrics
 
    app = Flask(__name__)
+   metrics = PrometheusMetrics(app)
 
-   # Create metrics
-   REQUEST_TIME = Summary('request_processing_seconds', 'Time spent processing request')
-   REQUEST_COUNT = Counter('request_count', 'Number of requests processed')
-   IN_PROGRESS = Gauge('inprogress_requests', 'Number of requests in progress')
-
-   @REQUEST_TIME.time()
-   def process_request(t):
-       time.sleep(t)
+   # Exemplo de métrica personalizada por endpoint
+   metrics.info('app_info', 'Application info', version='1.0.0')
 
    @app.route('/')
-   def home():
-       IN_PROGRESS.inc()
-       process_request(random.random())
-       REQUEST_COUNT.inc()
-       IN_PROGRESS.dec()
-       return render_template('index.html')
+   def hello():
+      return "Hello, World!"
 
-   @app.route('/metrics')
-   def metrics():
-       return generate_latest(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+   @app.route('/personagens', methods=['GET'])
+   def get_personagens():
+      return jsonify(db)
+
+   @app.route('/personagens/<int:id>', methods=['GET'])
+   def get_personagem(id):
+      personagem = next((p for p in db if p["id"] == id), None)
+      return jsonify(personagem) if personagem else ("Not Found", 404)
+
+   @app.route('/personagens', methods=['POST'])
+   def create_personagem():
+      new_personagem = request.json
+      db.append(new_personagem)
+      return jsonify(new_personagem), 201
+
+   @app.route('/personagens/<int:id>', methods=['PUT'])
+   def update_personagem(id):
+      personagem = next((p for p in db if p["id"] == id), None)
+      if personagem:
+         personagem.update(request.json)
+         return jsonify(personagem)
+      return ("Not Found", 404)
+
+   @app.route('/personagens/<int:id>', methods=['DELETE'])
+   def delete_personagem(id):
+      global db
+      db = [p for p in db if p["id"] != id]
+      return ("", 204)
 
    if __name__ == '__main__':
-       start_http_server(8000)
-       app.run(host='0.0.0.0', port=5001)
+      app.run(host='0.0.0.0', port=5000)
+
    ```
 
 2. **Reconstruir e Executar o Container:**
@@ -344,3 +358,241 @@ Para adicionar um serviço de APM de código aberto ano projeto Flask sem usar D
 2. **Visualizar Métricas no Grafana:**
 
    Acesse o Grafana em `http://localhost:3000` e veja se o dashboard está exibindo as métricas corretamente.
+
+
+Aqui estão alguns exemplos de consultas Prometheus (PromQL) que você pode usar para monitorar o seu aplicativo Flask:
+
+### Contagem Total de Requisições
+
+Para obter o número total de requisições processadas pela aplicação:
+
+```promql
+request_count_total
+```
+
+### Tempo Médio de Processamento de Requisições
+
+Para calcular o tempo médio de processamento das requisições:
+
+```promql
+rate(request_processing_seconds_sum[1m]) / rate(request_processing_seconds_count[1m])
+```
+
+### Requisições em Progresso
+
+Para obter o número atual de requisições em progresso:
+
+```promql
+inprogress_requests
+```
+
+### Taxa de Requisições por Segundo
+
+Para obter a taxa de requisições processadas por segundo nos últimos 5 minutos:
+
+```promql
+rate(request_count_total[5m])
+```
+
+### Tempo Percentil 95 de Processamento de Requisições
+
+Para calcular o tempo de processamento no percentil 95 das requisições:
+
+```promql
+histogram_quantile(0.95, sum(rate(request_processing_seconds_bucket[5m])) by (le))
+```
+
+### Uso de CPU por Container
+
+Para obter o uso de CPU por container (se você estiver coletando métricas de CPU do seu ambiente):
+
+```promql
+sum(rate(container_cpu_usage_seconds_total[1m])) by (container_label_io_kubernetes_pod_name)
+```
+
+### Uso de Memória por Container
+
+Para obter o uso de memória por container (se você estiver coletando métricas de memória do seu ambiente):
+
+```promql
+sum(container_memory_usage_bytes) by (container_label_io_kubernetes_pod_name)
+```
+
+### Requisições com Erros
+
+Para obter a contagem de requisições que resultaram em erro (supondo que você esteja registrando erros em uma métrica separada):
+
+```promql
+rate(request_errors_total[5m])
+```
+
+### Exemplo de Configuração para Grafana
+
+Para usar essas consultas no Grafana, você pode criar painéis (dashboards) e adicionar gráficos (panels) com essas consultas. Aqui estão os passos básicos:
+
+1. **Adicionar um Painel no Grafana:**
+   - No Grafana, vá para `Create > Dashboard`.
+   - Clique em `Add new panel`.
+
+2. **Configurar a Consulta:**
+   - Na seção `Query`, selecione seu data source Prometheus.
+   - Insira uma das consultas Prometheus mencionadas acima na caixa de consulta.
+
+3. **Configurar o Gráfico:**
+   - Personalize o gráfico conforme necessário (e.g., título, eixos, intervalos de tempo).
+   - Clique em `Apply` para salvar o painel.
+
+### Exemplo de Consulta no Grafana
+
+Aqui está um exemplo de consulta no Grafana usando a métrica `request_count_total`:
+
+1. **Consulta:**
+   ```promql
+   rate(request_count_total[5m])
+   ```
+
+O Grafana é uma ferramenta poderosa para visualização de dados e pode se conectar a vários backends de dados, incluindo Prometheus. Abaixo estão alguns exemplos de consultas Grafana (escritas em PromQL) que você pode usar para monitorar métricas comuns em um ambiente de produção.
+
+### Consultas de Grafana usando PromQL
+
+#### 1. Contagem Total de Requisições
+
+Para obter o número total de requisições processadas pela aplicação:
+
+```promql
+sum(request_count_total)
+```
+
+#### 2. Taxa de Requisições por Segundo
+
+Para obter a taxa de requisições processadas por segundo nos últimos 5 minutos:
+
+```promql
+rate(request_count_total[5m])
+```
+
+#### 3. Tempo Médio de Processamento de Requisições
+
+Para calcular o tempo médio de processamento das requisições:
+
+```promql
+rate(request_processing_seconds_sum[5m]) / rate(request_processing_seconds_count[5m])
+```
+
+#### 4. Uso de CPU por Container
+
+Para obter o uso de CPU por container:
+
+```promql
+sum(rate(container_cpu_usage_seconds_total[5m])) by (container_label_io_kubernetes_pod_name)
+```
+
+#### 5. Uso de Memória por Container
+
+Para obter o uso de memória por container:
+
+```promql
+sum(container_memory_usage_bytes) by (container_label_io_kubernetes_pod_name)
+```
+
+#### 6. Requisições com Erros
+
+Para obter a contagem de requisições que resultaram em erro:
+
+```promql
+rate(request_errors_total[5m])
+```
+
+#### 7. Tempo Percentil 95 de Processamento de Requisições
+
+Para calcular o tempo de processamento no percentil 95 das requisições:
+
+```promql
+histogram_quantile(0.95, sum(rate(request_processing_seconds_bucket[5m])) by (le))
+```
+
+#### 8. Número de Pods por Estado
+
+Para visualizar quantos pods estão em diferentes estados (Running, Pending, etc.):
+
+```promql
+count(kube_pod_status_phase{phase="Running"})
+```
+
+#### 9. Latência Média das Requisições HTTP
+
+Para obter a latência média das requisições HTTP:
+
+```promql
+histogram_quantile(0.5, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+```
+
+#### 10. Número de Pods Reiniciados
+
+Para visualizar o número de pods que foram reiniciados:
+
+```promql
+sum(kube_pod_container_status_restarts_total)
+```
+
+### Passo a Passo para Usar as Consultas no Grafana
+
+1. **Adicionar um Painel no Grafana:**
+   - No Grafana, vá para `Create > Dashboard`.
+   - Clique em `Add new panel`.
+
+2. **Configurar a Consulta:**
+   - Na seção `Query`, selecione seu data source Prometheus.
+   - Insira uma das consultas Prometheus mencionadas acima na caixa de consulta.
+
+3. **Configurar o Gráfico:**
+   - Personalize o gráfico conforme necessário (e.g., título, eixos, intervalos de tempo).
+   - Clique em `Apply` para salvar o painel.
+
+### Exemplo Visual no Grafana
+
+1. **Configurar o Data Source:**
+   - Vá para `Configuration > Data Sources > Add data source`.
+   - Selecione `Prometheus`.
+   - Configure a URL como `http://localhost:9090` (ou onde o Prometheus está rodando).
+
+2. **Adicionar o Painel:**
+   - Vá para `Create > Dashboard`.
+   - Clique em `Add new panel`.
+   - Insira a consulta `rate(request_count_total[5m])`.
+   - Personalize o gráfico e clique em `Apply`.
+
+3. **Visualizar o Dashboard:**
+   - No dashboard, você verá a taxa de requisições por segundo visualizada como um gráfico de séries temporais.
+
+### Exemplos de Consultas em Painéis
+
+#### Painel de Requisições por Segundo
+
+- **Título:** `Requisições por Segundo`
+- **Consulta:**
+  ```promql
+  rate(request_count_total[5m])
+  ```
+
+#### Painel de Uso de CPU
+
+- **Título:** `Uso de CPU por Pod`
+- **Consulta:**
+  ```promql
+  sum(rate(container_cpu_usage_seconds_total[5m])) by (container_label_io_kubernetes_pod_name)
+  ```
+
+#### Painel de Latência
+
+- **Título:** `Latência Média das Requisições HTTP`
+- **Consulta:**
+  ```promql
+  histogram_quantile(0.5, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+  ```
+
+### Dashboard no Grafana
+
+Confira como ficou o dashboard no Grafana
+
+![grafana](imagens/grafana.jpeg)
