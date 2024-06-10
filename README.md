@@ -220,6 +220,36 @@ Um Service no Kubernetes é um recurso que define uma política de acesso de red
 
 Em resumo, enquanto o Deployment gerencia a implantação e a escalabilidade dos Pods que compõem a aplicação, o Service gerencia a exposição de rede dos Pods, garantindo que eles possam ser acessados de forma confiável por outros componentes do sistema. Juntos, esses recursos fornecem uma base sólida para implantar e executar aplicativos distribuídos no Kubernetes.
 
+
+### Dashboard do Kubernetes
+
+## Passo 1: Inicie o Minikube
+```sh
+minikube start
+```
+
+## Passo 2: Habilite o Metrics Server no Minikube
+```sh
+minikube addons enable metrics-server
+```
+
+## Passo 3: Crie um alias para o kubectl do Minikube
+```sh
+minikube addons enable metrics-server
+```
+
+## Passo 3: Crie um alias para o kubectl do Minikube
+```sh
+minikube dashboard
+
+```
+
+Confira como ficou o dashboard do K8s
+
+![grafana](imagens/k8s.jpeg)
+![grafana](imagens/k8s_.jpeg)
+
+
 ## APM
 
 Para adicionar um serviço de APM de código aberto ano projeto Flask sem usar Docker Compose, uma boa opção é usar o **Prometheus** para monitoramento e o **Grafana** para visualização. Vamos configurar essas ferramentas manualmente.
@@ -260,50 +290,115 @@ Para adicionar um serviço de APM de código aberto ano projeto Flask sem usar D
    Modifique o `app.py` para expor as métricas do Prometheus:
 
    ```python
-   from flask import Flask, request
+   from flask import Flask, jsonify, request, render_template
    from prometheus_flask_exporter import PrometheusMetrics
+   from prometheus_client import start_http_server, Summary, Counter, Gauge, generate_latest
 
-   app = Flask(__name__)
+   app = Flask(__name__, template_folder="templates")
    metrics = PrometheusMetrics(app)
 
-   # Exemplo de métrica personalizada por endpoint
    metrics.info('app_info', 'Application info', version='1.0.0')
 
-   @app.route('/')
-   def hello():
-      return "Hello, World!"
+   # Create metrics
+   REQUEST_TIME = Summary('request_processing_seconds', 'Time spent processing request')
+   REQUEST_COUNT = Counter('request_count', 'Number of requests processed', ['endpoint'])
+   IN_PROGRESS = Gauge('inprogress_requests', 'Number of requests in progress', ['endpoint'])
 
-   @app.route('/personagens', methods=['GET'])
-   def get_personagens():
+   # Exemplo de dados simulados em um banco de dados
+   db = [
+      {"id": 1, "nome": "Chaves", "idade": 40},
+      {"id": 2, "nome": "Seu Madruga", "idade": 50},
+      {"id": 3, "nome": "Chiquinha", "idade": 30},
+      {"id": 4, "nome": "Quico", "idade": 10},
+      {"id": 5, "nome": "Dona Florinda", "idade": 45},
+      {"id": 6, "nome": "Professor Girafales", "idade": 35},
+      {"id": 7, "nome": "Seu Barriga", "idade": 60},
+      {"id": 8, "nome": "Don Ramón", "idade": 40}
+   ]
+
+   @app.route('/')
+   @REQUEST_TIME.time()
+   def home():
+      endpoint = '/'
+      IN_PROGRESS.labels(endpoint=endpoint).inc()
+      REQUEST_COUNT.labels(endpoint=endpoint).inc()
+      IN_PROGRESS.labels(endpoint=endpoint).dec()
+      return render_template('index.html')
+
+   # Endpoint para retornar todos os registros
+   @app.route('/api/data', methods=['GET'])
+   @REQUEST_TIME.time()
+   def get_all_data():
+      endpoint = '/api/data'
+      IN_PROGRESS.labels(endpoint=endpoint).inc()
+      REQUEST_COUNT.labels(endpoint=endpoint).inc()
+      IN_PROGRESS.labels(endpoint=endpoint).dec()
       return jsonify(db)
 
-   @app.route('/personagens/<int:id>', methods=['GET'])
-   def get_personagem(id):
-      personagem = next((p for p in db if p["id"] == id), None)
-      return jsonify(personagem) if personagem else ("Not Found", 404)
+   # Endpoint para retornar um registro específico
+   @app.route('/api/data/<int:data_id>', methods=['GET'])
+   @REQUEST_TIME.time()
+   def get_data(data_id):
+      endpoint = f'/api/data/{data_id}'
+      IN_PROGRESS.labels(endpoint=endpoint).inc()
+      REQUEST_COUNT.labels(endpoint=endpoint).inc()
+      IN_PROGRESS.labels(endpoint=endpoint).dec()
+      data = next((item for item in db if item["id"] == data_id), None)
+      if data:
+         return jsonify(data)
+      else:
+         return jsonify({"message": "Data not found"}), 404
 
-   @app.route('/personagens', methods=['POST'])
-   def create_personagem():
-      new_personagem = request.json
-      db.append(new_personagem)
-      return jsonify(new_personagem), 201
+   # Endpoint para adicionar um novo registro
+   @app.route('/api/data', methods=['POST'])
+   @REQUEST_TIME.time()
+   def add_data():
+      endpoint = '/api/data'
+      IN_PROGRESS.labels(endpoint=endpoint).inc()
+      REQUEST_COUNT.labels(endpoint=endpoint).inc()
+      IN_PROGRESS.labels(endpoint=endpoint).dec()
+      new_data = request.json
+      if "id" in new_data and "nome" in new_data and "idade" in new_data:
+         db.append(new_data)
+         return jsonify({"message": "Data added successfully"}), 201
+      else:
+         return jsonify({"message": "Incomplete data"}), 400
 
-   @app.route('/personagens/<int:id>', methods=['PUT'])
-   def update_personagem(id):
-      personagem = next((p for p in db if p["id"] == id), None)
-      if personagem:
-         personagem.update(request.json)
-         return jsonify(personagem)
-      return ("Not Found", 404)
+   # Endpoint para atualizar um registro existente
+   @app.route('/api/data/<int:data_id>', methods=['PUT'])
+   @REQUEST_TIME.time()
+   def update_data(data_id):
+      endpoint = f'/api/data/{data_id}'
+      IN_PROGRESS.labels(endpoint=endpoint).inc()
+      REQUEST_COUNT.labels(endpoint=endpoint).inc()
+      IN_PROGRESS.labels(endpoint=endpoint).dec()
+      data = next((item for item in db if item["id"] == data_id), None)
+      if data:
+         data.update(request.json)
+         return jsonify({"message": "Data updated successfully"})
+      else:
+         return jsonify({"message": "Data not found"}), 404
 
-   @app.route('/personagens/<int:id>', methods=['DELETE'])
-   def delete_personagem(id):
+   # Endpoint para deletar um registro
+   @app.route('/api/data/<int:data_id>', methods=['DELETE'])
+   @REQUEST_TIME.time()
+   def delete_data(data_id):
+      endpoint = f'/api/data/{data_id}'
+      IN_PROGRESS.labels(endpoint=endpoint).inc()
+      REQUEST_COUNT.labels(endpoint=endpoint).inc()
+      IN_PROGRESS.labels(endpoint=endpoint).dec()
       global db
-      db = [p for p in db if p["id"] != id]
-      return ("", 204)
+      db = [item for item in db if item["id"] != data_id]
+      return jsonify({"message": "Data deleted successfully"})
+
+   @app.route('/metrics')
+   def metrics():
+      return generate_latest(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
    if __name__ == '__main__':
+      start_http_server(8000)
       app.run(host='0.0.0.0', port=5000)
+
 
    ```
 
@@ -392,14 +487,6 @@ Para obter a taxa de requisições processadas por segundo nos últimos 5 minuto
 
 ```promql
 rate(request_count_total[5m])
-```
-
-### Tempo Percentil 95 de Processamento de Requisições
-
-Para calcular o tempo de processamento no percentil 95 das requisições:
-
-```promql
-histogram_quantile(0.95, sum(rate(request_processing_seconds_bucket[5m])) by (le))
 ```
 
 ### Uso de CPU por Container
